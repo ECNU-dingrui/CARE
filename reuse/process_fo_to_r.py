@@ -2,6 +2,11 @@ import copy
 import json
 import re
 
+try:
+    from reuse.stage_errors import CareStageError
+except ImportError:  # 兼容直接在 reuse 目录下执行脚本
+    from stage_errors import CareStageError
+
 OR_RELATION_ERROR = 0
 RULE_ID_ERROR = 1
 IF_ERROR = 2
@@ -312,41 +317,75 @@ def check_and_fix_answer(answer):
 
 
 
+def extract_answer(data):
+    """从本地模型或普通 API 文本响应中提取规则正文。"""
+    prediction = data.get('prediction')
+    if prediction is None:  # 兼容早期 API 分支写入的 predication 字段
+        prediction = data.get('predication')
+    if prediction is None:
+        raise ValueError("缺少 prediction 字段")
+    prediction = str(prediction)
+
+    if "<|begin_of_text|>" in prediction:  # llama3
+        answer = prediction.split("<|end_header_id|>")[-1]
+        if "<|eot_id|>" in answer:
+            answer = answer.split("<|eot_id|>")[0]
+    elif "<s><|im_start|>" in prediction:  # internlm2
+        answer = prediction.split("assistant")[-1]
+        if "<|im_end|>" in answer:
+            answer = answer.split("<|im_end|>")[0]
+    elif "<|im_start|>" in prediction:  # qwen2
+        answer = prediction.split("assistant")[-1]
+        if "<|im_end|>" in answer:
+            answer = answer.split("<|im_end|>")[0]
+    elif "<s>" in prediction:  # llama2
+        answer = prediction.split("Assistant:")[-1]
+        if "</s>" in answer:
+            answer = answer.split("</s>")[0]
+    elif "<|user|>" in prediction:  # GLM4
+        answer = prediction.split("<|assistant|>")[-1]
+        if "<|user|>" in answer:
+            answer = answer.split("<|user|>")[0]
+    else:  # 普通 API 文本响应
+        answer = prediction
+
+    answer = answer.strip()
+    # 兼容模型返回的 Markdown 代码块
+    if answer.startswith("```"):
+        lines = answer.splitlines()
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        while lines and lines[-1].strip() == "":
+            lines = lines[:-1]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        answer = "\n".join(lines).strip()
+    return answer
+
+
 def to_r(datas, fix=True):
     r1 = ""
     for data in datas:
-        source_id = data['id']
-        if "<|begin_of_text|>" in data['prediction']:  # llama3
-            answer = data['prediction'].split("<|end_header_id|>")[-1]
-            if "<|eot_id|>" in answer:
-                answer = answer.split("<|eot_id|>")[0]
-            answer = answer.strip()
-        elif "<s><|im_start|>" in data['prediction']:  # internlm2
-            answer = data['prediction'].split("assistant")[-1]
-            if "<|im_end|>" in answer:
-                answer = answer.split("<|im_end|>")[0]
-            answer = answer.strip()
-        elif "<|im_start|>" in data['prediction']:  # qwen2
-            answer = data['prediction'].split("assistant")[-1]
-            if "<|im_end|>" in answer:
-                answer = answer.split("<|im_end|>")[0]
-            answer = answer.strip()
-        elif "<s>" in data['prediction']:  # llama2
-            answer = data['prediction'].split("Assistant:")[-1]
-            if "</s>" in answer:
-                answer = answer.split("</s>")[0]
-            answer = answer.strip()
-        elif "<|user|>" in data['prediction']:  # GLM4
-            answer = data['prediction'].split("<|assistant|>")[-1]
-            if "<|user|>" in answer:
-                answer = answer.split("<|user|>")[0]
-            answer = answer.strip()
-        
-        # 模型后处理，修正生成的规则
-        if fix:
-            rule = check_and_fix_answer(answer)
-        else:
-            rule = answer
+        source_id = data.get('id', '<unknown>')
+        try:
+            answer = extract_answer(data)
+            if not answer:
+                raise ValueError("规则抽取结果为空")
+
+            # 模型后处理，修正生成的规则
+            if fix:
+                rule = check_and_fix_answer(answer)
+            else:
+                rule = answer
+        except CareStageError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise CareStageError(
+                "rule_postprocess",
+                "规则后处理",
+                f"规则 {source_id} 后处理失败：{exc}",
+                cause=exc,
+            ) from exc
 
         # 将规则转化为R1格式
         stage = 0

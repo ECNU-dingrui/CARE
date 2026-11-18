@@ -58,11 +58,12 @@ def judge_line_begin_with_id(before_str, str):
         except Exception as e:
             return False, ""
     
-    # Rule 1, Rule 1.1
+    # Rule 1, Rule 1.1, Rule 67_2
     if str.startswith("Rule "):
-        id = str.split(" ")[1]
-        if id.isdigit() or all(c.isdigit() for c in id.split(".")):
-            return True, "Rule " + id
+        raw_id = str.split(" ")[1]
+        normalized_id = raw_id.replace("_", ".")
+        if normalized_id.isdigit() or all(c.isdigit() for c in normalized_id.split(".")):
+            return True, "Rule " + raw_id
     return False, ""
 
 
@@ -199,7 +200,10 @@ def nl_to_sci(knowledge, nl_file=None, nl_data=None, hybrid=False):
 
         if begin_with_id:
             # 必须有id才能进入下一步sc
-            sci.append({"id": id, "text": line[len(id):].strip()})
+            text = line[len(id):].strip()
+            if id.startswith("Rule "):
+                id = id[len("Rule "):].replace("_", ".")
+            sci.append({"id": id, "text": text})
         else:
             sci.append({
                 "id": str(default_id),

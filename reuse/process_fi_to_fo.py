@@ -6,6 +6,11 @@ from tqdm import tqdm
 import threading
 from openai import OpenAI
 
+try:
+    from reuse.stage_errors import CareStageError
+except ImportError:  # 兼容直接在 reuse 目录下执行脚本
+    from stage_errors import CareStageError
+
 max_new_tokens = 1024 * 2
 
 def request_api(system_prompt, rule, api_key):
@@ -23,9 +28,11 @@ def request_api(system_prompt, rule, api_key):
         ],
         max_tokens=max_new_tokens,
         temperature=0,  # 禁用随机性
-        do_sample=False
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    if content is None or not content.strip():
+        raise RuntimeError("模型网关返回了空的规则抽取结果")
+    return content
 
 
 def rule_formalization(fi, model_name_or_path, setting=None, **kwargs):
@@ -36,9 +43,25 @@ def rule_formalization(fi, model_name_or_path, setting=None, **kwargs):
         # 调用api抽取规则
         system_prompt = open("prompt_gpt5.txt", "r", encoding="utf-8").read()
         for item in tqdm(fo):
-            rule = item['rule']
-            predication = request_api(system_prompt, f"规则: {rule}", api_key)
-            item['predication'] = predication
+            rule_text = item.get('text') or item.get('rule')
+            if not rule_text:
+                raise CareStageError(
+                    "rule_formalization",
+                    "规则抽取",
+                    f"规则 {item.get('id', '<unknown>')} 缺少 text 字段，无法调用模型网关",
+                )
+            try:
+                prediction = request_api(system_prompt, f"规则: {rule_text}", api_key)
+            except CareStageError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise CareStageError(
+                    "rule_formalization",
+                    "规则抽取",
+                    f"规则 {item.get('id', '<unknown>')} 调用模型网关失败：{exc}",
+                    cause=exc,
+                ) from exc
+            item['prediction'] = prediction
         return fo
 
     if all([model not in model_name_or_path for model in ["llama2", "llama3", "qwen2", "internlm2", "glm4", 'qwen1.5', 'chatglm3']]):

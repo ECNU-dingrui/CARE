@@ -143,6 +143,8 @@ def main():
     if str(care_root) not in sys.path:
         sys.path.insert(0, str(care_root))
 
+    from reuse.stage_errors import get_care_stage
+
     if start.get("demo") is True or os.environ.get("CARE_DEMO") == "1":
         try:
             return run_demo(start, care_root, workspace_directory, final_directory)
@@ -235,8 +237,16 @@ def main():
     except Exception as exc:  # noqa: BLE001
         detail = traceback.format_exc()
         sys.stderr.write(detail + "\n")
-        issue(str(exc), level="error", stage="care", fatal=True)
-        emit({"type": "error", "message": str(exc)})
+        stage, stage_name = get_care_stage(exc)
+        issue(str(exc), level="error", stage=stage, fatal=True)
+        emit(
+            {
+                "type": "error",
+                "message": str(exc),
+                "stage": stage,
+                "stageName": stage_name,
+            }
+        )
         return 1
 
 

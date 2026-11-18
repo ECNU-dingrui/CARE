@@ -1,9 +1,0 @@
-{
-  "toolId": "sf_care_evolve_testcase",
-  "input": {
-    "oldRuleFile": "/home/dingrui/ECNU/proj/CARE/data/evaluation_dataset/ini_rule/dataset1_ini_rule.txt",
-    "oldTestcasesFile": "/home/dingrui/ECNU/proj/CARE/data/evaluation_dataset/ini_testcase/dataset1_ini_testcase.json",
-    "newRuleFile": "/home/dingrui/ECNU/proj/CARE/data/evaluation_dataset/upd_rule/dataset1_upd_rule.txt",
-    "skipSc": true
-  }
-}

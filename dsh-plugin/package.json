@@ -13,10 +13,14 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json",
     "./agent-registration.json": "./agent-registration.json",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./client": {
+      "default": "./client.js"
+    }
   },
   "files": [
     "lib",
+    "client.js",
     "cordis.patch.yml",
     "README.md",
     "python",
@@ -26,6 +30,15 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
+      ]
     }
   },
   "scripts": {
@@ -34,6 +47,10 @@
   },
   "dependencies": {
     "@software-factory/runtime-sdk": "file:vendor/software-factory-runtime-sdk-0.4.1.tgz"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/schemastery": "3.18.5-alpha.1"
   },
   "devDependencies": {
     "@types/node": "^22",

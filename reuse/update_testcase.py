@@ -8,6 +8,7 @@ from reuse.process_r3_to_testcase import process_r3_to_testcase
 from transfer.mydsl_to_rules import mydsl_to_rules, transfer_new_rule_format_to_old, transfer_old_rule_format_to_new
 from transfer.rules_to_mydsl import rules_to_mydsl
 from reuse.generate_linked_scenario import generate_linked_scenario
+from reuse.stage_errors import care_stage
 
 def _default_api_key():
     """兼容命令行调试：接口文件存在时读取，否则返回空配置。"""
@@ -30,13 +31,17 @@ def update_testcase(old_file, old_testcases, new_file, sc_model_path, tc_model_p
     old_testcases = json.load(open(old_testcases, "r", encoding="utf-8"))
 
     # 获得新旧文件的规则和场景
-    old_texts, old_mv, old_sco = get_rules(old_file, classification_knowledge_file, sc_model_path, skip_sc)
-    old_rules = get_scenario(old_texts, old_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, old_sco, api_key=api_key)
-    old_rules = transfer_new_rule_format_to_old(mydsl_to_rules(old_rules))
+    with care_stage("rule_parsing", "规则解析"):
+        old_texts, old_mv, old_sco = get_rules(old_file, classification_knowledge_file, sc_model_path, skip_sc)
+    with care_stage("scenario_generation", "场景生成"):
+        old_rules = get_scenario(old_texts, old_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, old_sco, api_key=api_key)
+        old_rules = transfer_new_rule_format_to_old(mydsl_to_rules(old_rules))
     json.dump(old_rules, open("cache/old_scenario.json", "w", encoding="utf-8"), ensure_ascii=False, indent=4)
-    new_texts, new_mv, new_sco = get_rules(new_file, classification_knowledge_file, sc_model_path, skip_sc)
-    new_rules = get_scenario(new_texts, new_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, new_sco, api_key=api_key)
-    new_rules = transfer_new_rule_format_to_old(mydsl_to_rules(new_rules))
+    with care_stage("rule_parsing", "规则解析"):
+        new_texts, new_mv, new_sco = get_rules(new_file, classification_knowledge_file, sc_model_path, skip_sc)
+    with care_stage("scenario_generation", "场景生成"):
+        new_rules = get_scenario(new_texts, new_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, new_sco, api_key=api_key)
+        new_rules = transfer_new_rule_format_to_old(mydsl_to_rules(new_rules))
     json.dump(new_rules, open("cache/new_scenario.json", "w", encoding="utf-8"), ensure_ascii=False, indent=4)
 
     old_rules = json.load(open("cache/old_scenario.json", "r", encoding="utf-8"))
@@ -62,7 +67,8 @@ def update_testcase(old_file, old_testcases, new_file, sc_model_path, tc_model_p
     }
     """
 
-    old_relation = relation_mining(old_rules, old_testcases)
+    with care_stage("relation_mining", "规则与测试用例关联挖掘"):
+        old_relation = relation_mining(old_rules, old_testcases)
     json.dump(old_relation, open("cache/old_rule_testcase_relation.json", "w", encoding="utf-8"), ensure_ascii=False, indent=4)
     # print(sorted(old_relation.keys(), key=lambda x: int(x)))
 
@@ -164,7 +170,8 @@ def update_testcase(old_file, old_testcases, new_file, sc_model_path, tc_model_p
     print(f"更改的规则数：{len(to_delete_rules)}")
 
     all_to_delete_linked_scenario = []
-    linked_scenario = generate_linked_scenario(old_rules_str)
+    with care_stage("impact_analysis", "变更影响分析"):
+        linked_scenario = generate_linked_scenario(old_rules_str)
     for to_delete_rule in to_delete_rules:
         for linked_scenario1 in linked_scenario:
             for rule in linked_scenario1:
@@ -252,23 +259,27 @@ def update_testcase(old_file, old_testcases, new_file, sc_model_path, tc_model_p
                 if rule_id == old_text['id']:
                     related_rules.append(old_text)
                     break
-        new_rules = get_scenario(related_rules, old_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, old_sco, api_key=api_key)
-        new_testcases = process_r3_to_testcase(new_rules)
+        with care_stage("scenario_generation", "场景生成"):
+            new_rules = get_scenario(related_rules, old_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, old_sco, api_key=api_key)
+        with care_stage("testcase_generation", "测试用例生成"):
+            new_testcases = process_r3_to_testcase(new_rules)
         old_testcases.extend(new_testcases)
 
         # 生成需求场景
         for scenario in all_to_delete_linked_scenario:
             if scenario in linked_scenario:
                 linked_scenario.remove(scenario)
-        new_linked_scenario = generate_linked_scenario(new_rules)
+        with care_stage("impact_analysis", "变更影响分析"):
+            new_linked_scenario = generate_linked_scenario(new_rules)
         for scenario in new_linked_scenario:
             if scenario not in linked_scenario:
                 linked_scenario.append(scenario)
 
     # 否则，需要重新生成全部的测试场景，然后从中选出新增的规则对应的场景生成测试用例
     elif len(to_add_rules) > 0:
-        new_rules = get_scenario(new_texts, new_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, new_sco, api_key=api_key)
-        new_rules = transfer_new_rule_format_to_old(mydsl_to_rules(new_rules))
+        with care_stage("scenario_generation", "场景生成"):
+            new_rules = get_scenario(new_texts, new_mv, tc_model_path, classification_knowledge_file, other_knowledge_file, new_sco, api_key=api_key)
+            new_rules = transfer_new_rule_format_to_old(mydsl_to_rules(new_rules))
         new_scenarios = {}
         for to_add_rule in to_add_rules:
             to_add_rule_id = to_add_rule['id']
@@ -279,7 +290,8 @@ def update_testcase(old_file, old_testcases, new_file, sc_model_path, tc_model_p
                         new_scenarios[new_rule_id] = new_rules[new_rule_id]
                         break
         
-        new_testcases = process_r3_to_testcase(rules_to_mydsl(transfer_old_rule_format_to_new(new_scenarios)))
+        with care_stage("testcase_generation", "测试用例生成"):
+            new_testcases = process_r3_to_testcase(rules_to_mydsl(transfer_old_rule_format_to_new(new_scenarios)))
         old_testcases.extend(new_testcases)
         
         # for scenario in all_to_delete_linked_scenario:
@@ -289,7 +301,8 @@ def update_testcase(old_file, old_testcases, new_file, sc_model_path, tc_model_p
         # for scenario in new_linked_scenario:
         #     if scenario not in linked_scenario:
         #         linked_scenario.append(scenario)
-        linked_scenario = generate_linked_scenario(rules_to_mydsl(transfer_old_rule_format_to_new(new_rules)))
+        with care_stage("impact_analysis", "变更影响分析"):
+            linked_scenario = generate_linked_scenario(rules_to_mydsl(transfer_old_rule_format_to_new(new_rules)))
 
     return old_testcases, change_rules, linked_scenario, old_relation
 

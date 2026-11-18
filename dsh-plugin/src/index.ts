@@ -1,13 +1,46 @@
+import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
 import { registerRunTool } from '@software-factory/runtime-sdk'
 import { runBusiness, setHostContext, setPluginConfig, type CarePluginConfig } from './business.js'
 
 export const name = 'care-dsh-plugin'
 export const inject = ['tools', 'sfRuntime']
 
-export function apply(_ctx: unknown, config?: CarePluginConfig): void {
+/**
+ * DSH 插件配置表单的字段定义。volatile 字段可在设置页保存后立即生效，
+ * 无需修改 cordis.patch.yml 或重启 DSH。
+ */
+export const Config = z.object({
+  careRoot: z.string().default('')
+    .description('CARE 仓库根目录；留空时按插件安装位置自动推导。')
+    .volatile(),
+  demo: z.boolean().default(false)
+    .description('演示模式：不运行真实 CARE 与模型，只验证 DSH 任务链路。')
+    .volatile(),
+  python: z.object({
+    executable: z.string().default('')
+      .description('DSH 服务端可用的 Python 解释器；留空时使用 CARE_PYTHON 或 python3。')
+      .volatile(),
+    script: z.string().default('')
+      .description('可选的 Python 桥接脚本；留空使用插件内置 python/care_runner.py。')
+      .volatile(),
+  }).default({}),
+})
+
+function useCustomConfigForm(ctx: Context): void {
+  ctx.inject(['settings'], (scope) => {
+    const settings = (scope as unknown as {
+      settings: { configure(presentation: { auto?: boolean }, owner: unknown): () => void }
+    }).settings
+    scope.effect(() => settings.configure({ auto: false }, ctx.fiber))
+  })
+}
+
+export function apply(ctx: Context, config?: CarePluginConfig): void {
   setPluginConfig(config)
-  setHostContext(_ctx)
-  registerRunTool(_ctx as never, {
+  setHostContext(ctx)
+  useCustomConfigForm(ctx)
+  registerRunTool(ctx, {
     toolId: 'sf_care_evolve_testcase',
     description:
       '给定初始法规文件、初始测试用例集和更新后的法规文件，执行 CARE 级联影响分析，'

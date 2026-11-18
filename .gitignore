@@ -1,0 +1,60 @@
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.ipynb_checkpoints/
+
+# ===== Node / TypeScript (dsh-plugin) =====
+node_modules/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ===== DSH / Runtime =====
+.dsh-home/
+.dsh/
+/outputs/
+dsh-plugin/.debug/
+dsh-plugin/lib/
+dsh-plugin/runtime-release/
+dsh-plugin/vendor/*.tgz
+
+# ===== Local models / large artifacts =====
+/model/
+
+# ===== Local config / secrets =====
+api_key.json
+.env
+.env.*
+*.local
+
+# ===== Logs / temp =====
+*.log
+tmp/
+temp/
+*.tmp

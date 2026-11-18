@@ -15,8 +15,9 @@ dsh-plugin/
 ├── package.json
 ├── tsconfig.json
 ├── cordis.patch.yml
-├── src/index.ts              # registerRunTool 登记
+├── src/index.ts              # Config schema、registerRunTool 登记
 ├── src/business.ts           # 子进程、NDJSON 事件、产物登记
+├── client.js                 # DSH 插件页配置表单
 ├── python/care_runner.py     # Python 桥，调用 update_testcase
 ├── scripts/debug.ts          # 不启动 DSH 的本地调试
 ├── agent-registration.json   # 平台入库资料（占位，按实际补充）
@@ -58,19 +59,22 @@ reconstruct 工作区（`packages/contracts`、`packages/runtime-sdk`、`gateway
 
 ## 3. 配置
 
-`cordis.patch.yml` 中的 `config` 会传给 `apply(ctx, config)`：
+不需要手写 `cordis.patch.yml`。启用插件后，在 DSH 中打开：
 
-```yaml
-- insert:
-    - id: care-dsh
-      name: '@local/care-dsh-plugin'
-      config:
-        python:
-          executable: /path/to/venv/bin/python   # 指向已安装 CARE 依赖的解释器
-        careRoot: /absolute/path/to/CARE        # 留空时按插件位置推导
+```
+插件 → CARE 测试用例演进 → 包含的组件 → CARE 测试用例演进 → 配置
 ```
 
-也可以用环境变量 `CARE_PYTHON`、`CARE_ROOT` 覆盖。
+配置页提供以下字段，保存后对下一次任务生效，无需重启 DSH：
+
+| 字段 | 说明 |
+| --- | --- |
+| CARE 仓库根目录 | 包含 `reuse/update_testcase.py` 的目录；留空时自动推导。 |
+| Python 解释器 | DSH 服务端可用的解释器，建议指向已安装 CARE 依赖的虚拟环境；留空时使用 `CARE_PYTHON` 或 `python3`。 |
+| Python 桥接脚本 | 可选；默认使用插件内置 `python/care_runner.py`。 |
+| 演示模式 | 不运行真实 CARE 与模型，只验证任务链路。 |
+
+环境变量 `CARE_PYTHON`、`CARE_ROOT`、`CARE_DEMO` 仍可作为未填写时的回退。
 
 模型中真实 API Key 不写入本插件；Runtime 网关提供临时连接。若无法取得连接，
 CARE 会尝试本地模型，或在仓库根目录存在 `api_key.json` 时使用其中的配置。
@@ -104,7 +108,7 @@ CARE_DEMO=1 node --experimental-strip-types scripts/debug.ts
 ```
 
 终端会看到 progress / log / artifact 事件和最终结果。进入 DSH 时，启动 DSH 前设置
-`CARE_DEMO=1`，或在 `cordis.patch.yml` 中把 `demo` 设为 `true`。
+`CARE_DEMO=1`，或在插件配置页勾选「演示模式」。
 
 demo 只写示例 `new_testcase.json` 等文件，不运行真实算法。
 
@@ -112,7 +116,8 @@ demo 只写示例 `new_testcase.json` 等文件，不运行真实算法。
 
 1. 按 DSH 插件管理安装本目录的绝对路径；包名为 `@local/care-dsh-plugin`。
 2. 确保同一 profile 中**先启用 `software-factory-runtime`**，再启用本插件。
-3. 在真实工作区会话中先调用 `sf_runtime_get_tool_contract` 确认契约，再调用：
+3. 在“包含的组件”中打开本插件的配置页，按第 3 节填写 CARE 仓库根目录与 Python 解释器。
+4. 在真实工作区会话中先调用 `sf_runtime_get_tool_contract` 确认契约，再调用：
 
 ```json
 {

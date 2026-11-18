@@ -4,18 +4,22 @@ import type { Readable } from 'node:stream'
 import { existsSync } from 'node:fs'
 import { dirname, delimiter, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { Volatile } from '@deepseek-ai/cordis'
 import type { BusinessResult, ExecutionContext } from '@software-factory/runtime-sdk'
+
+/** 配置字段在 DSH 设置页保存后是 volatile 引用，需要每次通过 get() 读取最新值。 */
+type Live<T> = T | Volatile<T>
 
 export interface CarePluginConfig {
   /** CARE 仓库根目录；留空时按插件安装位置推导。 */
-  careRoot?: string
+  careRoot?: Live<string>
   /** 联调模式：不运行真实 CARE 与模型，只验证插件链路；也可用 CARE_DEMO=1。 */
-  demo?: boolean
+  demo?: Live<boolean>
   python?: {
     /** Python 解释器；默认环境变量 CARE_PYTHON 或 python3。 */
-    executable?: string
+    executable?: Live<string>
     /** bridge 脚本；默认 dsh-plugin/python/care_runner.py。 */
-    script?: string
+    script?: Live<string>
   }
 }
 
@@ -24,6 +28,14 @@ let hostContext: unknown
 
 export function setPluginConfig(config: CarePluginConfig | undefined): void {
   pluginConfig = config ?? {}
+}
+
+function readLive<T>(value: Live<T> | undefined): T | undefined {
+  if (value === undefined) return undefined
+  if (typeof value === 'object' && value !== null && 'get' in value) {
+    return (value as unknown as { get(): T }).get()
+  }
+  return value
 }
 
 export function setHostContext(ctx: unknown): void {
@@ -70,25 +82,26 @@ function moduleRoot(): string {
 }
 
 function resolveCareRoot(): string {
-  const configured = pluginConfig.careRoot?.trim() || process.env.CARE_ROOT?.trim()
+  const configured = readLive(pluginConfig.careRoot)?.trim() || process.env.CARE_ROOT?.trim()
   if (configured) return resolve(configured)
   for (const candidate of [resolve(moduleRoot(), '..'), process.cwd()]) {
     if (existsSync(resolve(candidate, 'reuse', 'update_testcase.py'))) return candidate
   }
   throw new Error(
-    '未找到 CARE 仓库根目录。请在插件配置中设置 careRoot，'
+    '未找到 CARE 仓库根目录。请在 DSH 插件配置页设置 CARE 仓库根目录，'
     + '或设置环境变量 CARE_ROOT 指向包含 reuse/update_testcase.py 的目录。'
   )
 }
 
 function resolvePython(): string {
-  const configured = pluginConfig.python?.executable?.trim() || process.env.CARE_PYTHON?.trim()
+  const configured = readLive(pluginConfig.python?.executable)?.trim()
+    || process.env.CARE_PYTHON?.trim()
   if (configured) return configured
   return process.platform === 'win32' ? 'python' : 'python3'
 }
 
 function resolveBridgeScript(careRoot: string): string {
-  const configured = pluginConfig.python?.script?.trim()
+  const configured = readLive(pluginConfig.python?.script)?.trim()
   if (configured) return isAbsolute(configured) ? configured : resolve(careRoot, configured)
   return resolve(moduleRoot(), 'python', 'care_runner.py')
 }
@@ -247,7 +260,7 @@ export async function runBusiness(
     workspaceDirectory: deriveWorkspace(execution.outputDirectory),
     modelConnection,
     careRoot,
-    demo: pluginConfig.demo === true || process.env.CARE_DEMO === '1'
+    demo: readLive(pluginConfig.demo) === true || process.env.CARE_DEMO === '1'
   })
 
   const child = await startChild(python, script, careRoot, startJson, execution)
@@ -274,6 +287,8 @@ export async function runBusiness(
   const exitPromise = child.wait()
   const finalArtifacts: string[] = []
   let resultText = ''
+  let failureStage: string | undefined
+  let failureStageName: string | undefined
 
   const lines = createInterface({ input: child.stdout })
   try {
@@ -331,6 +346,8 @@ export async function runBusiness(
           resultText = String(event.text ?? '')
           break
         case 'error':
+          if (typeof event.stage === 'string') failureStage = event.stage
+          if (typeof event.stageName === 'string') failureStageName = event.stageName
           throw new Error(String(event.message ?? 'CARE 执行失败'))
         default:
           await execution.log(trimmed, 'care')
@@ -348,8 +365,8 @@ export async function runBusiness(
     const reason = error instanceof Error ? error.message : String(error)
     await execution.reportIssue({
       level: 'error',
-      stage: 'care',
-      message: reason,
+      stage: failureStage ?? 'care',
+      message: failureStageName ? `${failureStageName}：${reason}` : reason,
       fatal: true
     })
     throw error

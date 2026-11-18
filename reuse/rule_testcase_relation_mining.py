@@ -115,6 +115,9 @@ def judge_conflict(rule, testcase, s=None):
             rule_values[c['key']].append(cvalue)
     for k, v in testcase.items():
         # 简化k和v
+        # 测试用例中的值可能是数字，统一转成字符串再比较
+        k = str(k)
+        v = v if isinstance(v, str) else str(v)
         # k包含“操作2”这种表达，去掉尾部数字，但不能去掉中间数组
         k = re.sub(r"\d+$", "", k)
         # k包含“结果操作”这种表达，去掉结果
