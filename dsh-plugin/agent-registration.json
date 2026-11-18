@@ -1,0 +1,45 @@
+{
+  "agent": {
+    "agent_id": "agent:care-compliance-test-evolution",
+    "name": "CARE 合规测试用例演进",
+    "description": "面向法规变更的级联影响感知合规测试套件演进：构建 Rule-Requirement-Scenario-Test Case 四层关联，识别受影响场景与测试用例，复用未受影响用例并更新受影响用例。"
+  },
+  "agentVersion": {
+    "properties": {
+      "version": "v1.0",
+      "status": "enabled",
+      "invoke_kind": "dsh_tool",
+      "dsh_ref": "sf_care_evolve_testcase",
+      "description": "给定初始法规文件、初始测试用例集和更新后的法规文件，输出演进后的测试用例集、变更规则 ID 及关联场景。",
+      "input_schema": {
+        "description": "初始法规文件、初始测试用例集、更新后的法规文件",
+        "x-artifact-kind": "file",
+        "x-file-extension": ".json",
+        "x-required": true
+      },
+      "output_schema": {
+        "description": "演进后的测试用例集及变更/场景中间材料",
+        "x-artifact-kind": "file",
+        "x-file-extension": ".json"
+      },
+      "intermediate_artifacts_json": [
+        { "description": "变更规则列表", "x-artifact-kind": "file", "x-file-extension": ".json" },
+        { "description": "关联场景", "x-artifact-kind": "file", "x-file-extension": ".json" },
+        { "description": "规则-测试用例关联关系", "x-artifact-kind": "file", "x-file-extension": ".json" }
+      ],
+      "constraints_json": {
+        "runtime": "Python",
+        "version": "3.9",
+        "notes": "需要 Node.js 24+ 的 DSH 插件宿主；CARE 依赖 pandas、pdfplumber、z3、sentence-transformers 等，见 requirements.txt。使用本地模型时需在 DSH 服务端预装模型与 GPU 依赖。"
+      },
+      "model_dependencies_json": [
+        { "vendor": "任意 OpenAI Chat Completions 兼容服务", "name": "由 Runtime 模型网关选择" }
+      ],
+      "object_categories_json": ["法规文档", "合规测试用例", "需求/场景规则"],
+      "performance_evidence_json": {
+        "evidence_kind": "paper",
+        "summary": "ISSTA 2026《CARE: Cascading Impact-Aware Compliance Test Suite Evolution under Regulatory Changes》：真实跨领域合规测试任务上，更新后测试套件平均 F1 90.3%，较现有方法最高提升 164%，接近专家水平；消融实验显示级联影响建模与处理是主要贡献。"
+      }
+    }
+  }
+}

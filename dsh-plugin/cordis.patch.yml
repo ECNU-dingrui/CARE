@@ -1,0 +1,12 @@
+- insert:
+    - id: care-dsh
+      name: '@local/care-dsh-plugin'
+      config:
+        # 本机联调可设为 true：跳过真实 CARE 与模型，只验证 DSH/Run 链路。
+        # 也可在启动 DSH 时设置环境变量 CARE_DEMO=1。
+        demo: false
+        python:
+          # DSH 服务端可用的 Python 解释器；建议指向已安装 CARE 依赖的虚拟环境。
+          executable: python3
+        # CARE 仓库根目录；留空时按插件安装位置推导。
+        # careRoot: /absolute/path/to/CARE

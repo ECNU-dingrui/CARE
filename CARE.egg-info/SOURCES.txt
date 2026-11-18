@@ -1,0 +1,6 @@
+README.md
+setup.py
+CARE.egg-info/PKG-INFO
+CARE.egg-info/SOURCES.txt
+CARE.egg-info/dependency_links.txt
+CARE.egg-info/top_level.txt
