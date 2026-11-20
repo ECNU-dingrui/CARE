@@ -165,7 +165,9 @@ async function startChild(
 ): Promise<ManagedChild> {
   const env = {
     PYTHONPATH: [careRoot, process.env.PYTHONPATH].filter(Boolean).join(delimiter),
-    PYTHONUNBUFFERED: '1'
+    PYTHONUNBUFFERED: '1',
+    PYTHONUTF8: '1',
+    PYTHONIOENCODING: 'utf-8'
   }
   let subprocess: HostSubprocess | undefined
   try {
@@ -378,5 +380,10 @@ export async function runBusiness(
   if (resultText === '' && finalArtifacts.length === 0) {
     throw new Error('CARE 未返回文本结果或最终文件')
   }
+  await execution.reportProgress({
+    stage: 'done',
+    stageName: '完成',
+    progress: 100
+  })
   return { text: resultText, files: finalArtifacts }
 }
